@@ -1,0 +1,29 @@
+name: C++ CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential cmake pkg-config \
+              libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+              libopencv-dev libsqlite3-dev libgtest-dev
+
+          cd /usr/src/googletest && sudo cmake . && sudo make && sudo make install
+
+      - name: Configure
+        run: cmake -S . -B build -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
