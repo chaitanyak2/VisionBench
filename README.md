@@ -73,6 +73,7 @@ The framework follows a clean layered architecture to allow fast experimentation
   - **SQLite:** lightweight structured logging (benchmark + metadata).  
   - **FAISS:** fast high-dimensional vector search for embeddings.
 
+
 ---
 
 ## 🧪 Development and Testing
