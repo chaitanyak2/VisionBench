@@ -1,10 +1,7 @@
 # VisionSearch Engine
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/chaitanyak2/VisionBench/ci.yml?branch=main&logo=github)](../../actions)
-![Issues](https://img.shields.io/github/issues/chaitanyak2/VisionBench?logo=github)
-![Pull Requests](https://img.shields.io/github/issues-pr/chaitanyak2/VisionBench?logo=git)
-![Code Lines](https://img.shields.io/badge/code%20lines-4.2k-blue)
-![Test Lines](https://img.shields.io/badge/test%20lines-1.1k-green)
+![Code Lines](https://img.shields.io/badge/code%20lines-350-blue)
+![Test Lines](https://img.shields.io/badge/test%20lines-135-green)
 
 ---
 
