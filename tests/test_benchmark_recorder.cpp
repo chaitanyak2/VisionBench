@@ -127,7 +127,8 @@ TEST(BenchmarkRecorderTest, QueueDrainsOnShutdown) {
     // create a new instance? it's singleton; but shutdown closed DB; instance still exists
     auto rows = rec.fetch_all();
     // Since we shutdown, fetch_all should return what's present
-    EXPECT_GE(rows.size(), 0u);
+    EXPECT_GE(rows.size(), 1000u);
+     rec.shutdown();
     std::remove(db.c_str());
 }
 

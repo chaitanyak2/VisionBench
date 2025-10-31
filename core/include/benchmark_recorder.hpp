@@ -60,6 +60,7 @@ private:
     void open_db();
     void close_db();
     void ensure_schema();
+     bool reopen_for_read();
 
     // internals
     std::mutex queue_mutex_;
@@ -67,6 +68,8 @@ private:
     std::deque<BenchmarkEntry> queue_;
     std::unique_ptr<std::thread> writer_thread_;
     std::atomic<bool> stop_flag_ {false};
+
+    bool done_ = false;
 
     // sqlite handle
     sqlite3* db_ = nullptr;
