@@ -1,27 +1,21 @@
-cmake_minimum_required(VERSION 3.18)
-project(VisionBench LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.16)
+project(visionbench CXX)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Options
-option(BUILD_TESTS "Build unit tests" ON)
-option(BUILD_PLUGINS "Build GStreamer plugins" ON)
+# add library
+add_library(visionbench
+    core/benchmark_recorder.cpp
+)
 
-# Dependencies
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GST_BASE REQUIRED gstreamer-base-1.0)
-find_package(OpenCV REQUIRED)
-find_package(SQLite3 REQUIRED)
+target_include_directories(visionbench PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/core)
+find_package(Threads REQUIRED)
+target_link_libraries(visionbench PUBLIC Threads::Threads sqlite3)
 
-include_directories(${GSTREAMER_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${SQLite3_INCLUDE_DIRS})
+# tests
+enable_testing()
+add_subdirectory(tests)
 
-add_subdirectory(core)
-add_subdirectory(plugins)
-
-if(BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
+# Install targets optionally
