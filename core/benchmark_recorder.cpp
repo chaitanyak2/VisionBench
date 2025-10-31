@@ -69,6 +69,8 @@ void BenchmarkRecorder::ensure_schema() {
     }
 }
 
+
+
 void BenchmarkRecorder::writer_thread_fn() {
     std::vector<BenchmarkEntry> batch;
     batch.reserve(batch_size_);
@@ -129,7 +131,7 @@ void BenchmarkRecorder::writer_thread_fn() {
             std::lock_guard<std::mutex> db_lock(db_mutex_);
             char* err = nullptr;
             sqlite3_exec(db_, "BEGIN TRANSACTION;", nullptr, nullptr, &err);
-            if (err) { sqlite3_free(err); err = nullptr; }
+            if (err) { sqlite3_free(err); err = nullptr;  std::cerr <<" SQLITE ERR" << std::endl;}
             const char* insert_sql = "INSERT INTO benchmarks (metadata_id, module_name, params, timestamp_ms, thread_id) VALUES (?, ?, ?, ?, ?);";
             sqlite3_stmt* stmt = nullptr;
             if (sqlite3_prepare_v2(db_, insert_sql, -1, &stmt, nullptr) == SQLITE_OK) {
@@ -145,7 +147,9 @@ void BenchmarkRecorder::writer_thread_fn() {
                 sqlite3_finalize(stmt);
             }
             sqlite3_exec(db_, "COMMIT;", nullptr, nullptr, &err);
-            if (err) { sqlite3_free(err); err = nullptr; }
+            if (err) { sqlite3_free(err); err = nullptr; 
+            std::cerr <<" SQLITE ERR" << std::endl;
+        }
         }
     }
 
@@ -166,27 +170,45 @@ void BenchmarkRecorder::record(const BenchmarkEntry& entry) {
 
 std::vector<BenchmarkEntry> BenchmarkRecorder::fetch_all() {
     std::vector<BenchmarkEntry> results;
-    std::lock_guard<std::mutex> lock(db_mutex_);
-    if (!db_) return results;
-    const char* q = "SELECT metadata_id, module_name, params, timestamp_ms, thread_id FROM benchmarks ORDER BY id ASC;";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db_, q, -1, &stmt, nullptr) != SQLITE_OK) {
-        std::cerr << "fetch_all prepare failed: " << sqlite3_errmsg(db_) << std::endl;
-        return results;
+    {
+        std::lock_guard<std::mutex> lock(db_mutex_);
+        if (!db_) {
+            if (!reopen_for_read()) {
+                std::cerr << "fetch_all(): unable to reopen DB for read\n";
+                return results;
+            }
+        }
+
+        const char* q = "SELECT metadata_id, module_name, params, timestamp_ms, thread_id "
+                        "FROM benchmarks ORDER BY id ASC;";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db_, q, -1, &stmt, nullptr) != SQLITE_OK) {
+            std::cerr << "fetch_all prepare failed: " << sqlite3_errmsg(db_) << std::endl;
+            return results;
+        }
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            BenchmarkEntry e;
+            e.metadata_id = (uint64_t) sqlite3_column_int64(stmt, 0);
+            const unsigned char* txt = sqlite3_column_text(stmt, 1);
+            e.module_name = txt ? reinterpret_cast<const char*>(txt) : "";
+            const unsigned char* p = sqlite3_column_text(stmt, 2);
+            e.params_serialized = p ? reinterpret_cast<const char*>(p) : "";
+            e.timestamp_unix_ms = (uint64_t) sqlite3_column_int64(stmt, 3);
+            e.thread_id = (uint64_t) sqlite3_column_int64(stmt, 4);
+            results.push_back(std::move(e));
+        }
+        sqlite3_finalize(stmt);
     }
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        BenchmarkEntry e;
-        e.metadata_id = (uint64_t) sqlite3_column_int64(stmt, 0);
-        const unsigned char* txt = sqlite3_column_text(stmt, 1);
-        e.module_name = txt ? reinterpret_cast<const char*>(txt) : "";
-        const unsigned char* p = sqlite3_column_text(stmt, 2);
-        e.params_serialized = p ? reinterpret_cast<const char*>(p) : "";
-        e.timestamp_unix_ms = (uint64_t) sqlite3_column_int64(stmt, 3);
-        e.thread_id = (uint64_t) sqlite3_column_int64(stmt, 4);
-        results.push_back(std::move(e));
-    }
-    sqlite3_finalize(stmt);
     return results;
+}
+
+bool BenchmarkRecorder::reopen_for_read() {
+    
+    if (sqlite3_open_v2(db_path_.c_str(), &db_, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to reopen database for read: " << sqlite3_errmsg(db_) << std::endl;
+        return false;
+    }
+    return true;
 }
 
 void BenchmarkRecorder::shutdown() {
@@ -195,11 +217,14 @@ void BenchmarkRecorder::shutdown() {
     
     if (writer_thread_ && writer_thread_->joinable()) {
         writer_thread_->join();   // ensures flush finished
+    } else {
+        std::cerr << "[WARN] Writer thread not joinable during shutdown.\n";
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50)); // optional, ensures commit complete
+    cv_.notify_all(); 
 
     {
+       
         std::lock_guard<std::mutex> lock(db_mutex_);
         if (db_) {
             sqlite3_exec(db_, "PRAGMA wal_checkpoint(FULL);", nullptr, nullptr, nullptr);
@@ -207,6 +232,7 @@ void BenchmarkRecorder::shutdown() {
             db_ = nullptr;
         }
     }
+    
 }
 
 BenchmarkRecorder::~BenchmarkRecorder() {
@@ -218,4 +244,4 @@ size_t BenchmarkRecorder::queue_size() {
     return queue_.size();
 }
 
-} // namespace vis
+} // namespace visionbench
