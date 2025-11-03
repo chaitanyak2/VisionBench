@@ -13,6 +13,9 @@ function(add_gtest name)
         ${GST_LIBRARIES}
         ${GST_VIDEO_LIBRARIES}
         coreutils
+        gtest
+        gtest_main
+        
     )
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
