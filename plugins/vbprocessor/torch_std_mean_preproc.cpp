@@ -17,6 +17,18 @@ struct _GstTorchPreproc {
     bool input_bgr;
 };
 
+static GstStaticPadTemplate sink_template =
+    GST_STATIC_PAD_TEMPLATE("sink",
+                            GST_PAD_SINK,
+                            GST_PAD_ALWAYS,
+                            GST_STATIC_CAPS("video/x-raw, format=(string)RGB, width=(int)[1,MAX], height=(int)[1,MAX]"));
+
+static GstStaticPadTemplate src_template =
+    GST_STATIC_PAD_TEMPLATE("src",
+                            GST_PAD_SRC,
+                            GST_PAD_ALWAYS,
+                            GST_STATIC_CAPS("video/x-raw, format=(string)RGB, width=(int)[1,MAX], height=(int)[1,MAX]"));
+
 G_DEFINE_TYPE(GstTorchPreproc, gst_torchpreproc, GST_TYPE_VIDEO_FILTER)
 
 static gboolean gst_torchpreproc_set_info(GstVideoFilter *filter,
@@ -36,7 +48,23 @@ extern "C" GstFlowReturn gst_torchpreproc_transform_frame(GstVideoFilter *filter
                                                       GstVideoFrame *inframe,
                                                       GstVideoFrame *outframe) {
     GstTorchPreproc *self = GST_TORCHPREPROC(filter);
-    GstBuffer *buf = gst_buffer_ref(inframe->buffer);
+    /* --- Ensure output buffer is writable --- */
+    GstBuffer *buf = inframe->buffer ? gst_buffer_ref(inframe->buffer) : nullptr;
+    if (!buf)
+        return GST_FLOW_ERROR;
+
+    if (!gst_buffer_is_writable(buf)) {
+        GstBuffer *w = gst_buffer_make_writable(buf);
+        if (!w) {
+            GST_ERROR_OBJECT(filter, "Failed to make buffer writable");
+            gst_buffer_unref(buf);
+            return GST_FLOW_ERROR;
+        }
+        if (w != buf) {
+            gst_buffer_unref(buf);
+            buf = w;
+        }
+    }
 
     // Get or create CoreMetadata
     GstCoreMeta *meta = gst_buffer_get_core_meta(buf);
@@ -107,11 +135,26 @@ extern "C" GstFlowReturn gst_torchpreproc_transform_frame(GstVideoFilter *filter
     return GST_FLOW_OK;
 }
 
-static void gst_torchpreproc_class_init(GstTorchPreprocClass *klass) {
+static void gst_torchpreproc_class_init(GstTorchPreprocClass *klass)
+{
+    GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
     GstVideoFilterClass *vfc = GST_VIDEO_FILTER_CLASS(klass);
+
+    // function pointers
     vfc->set_info = GST_DEBUG_FUNCPTR(gst_torchpreproc_set_info);
     vfc->transform_frame = GST_DEBUG_FUNCPTR(gst_torchpreproc_transform_frame);
-}
+
+    // metadata - required
+    gst_element_class_set_static_metadata(
+        element_class,
+        "Torch Preprocessor",
+        "Filter/Effect/Video",
+        "Preprocess frames using TorchScript",
+        "Chaitanya Khire <you@example.com>");
+
+    // add pad templates - REQUIRED for GstBaseTransform/GstVideoFilter
+    gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_template));
+    gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_template));}
 
 static void gst_torchpreproc_init(GstTorchPreproc *self) {
     self->out_w = 224;
@@ -120,7 +163,7 @@ static void gst_torchpreproc_init(GstTorchPreproc *self) {
 }
 
 // Plugin initialization function
-static gboolean plugin_init(GstPlugin *plugin)
+extern "C" gboolean plugin_init(GstPlugin *plugin)
 {
     return gst_element_register(plugin, "torchpreproc", GST_RANK_NONE, GST_TYPE_TORCHPREPROC);
 }
@@ -133,7 +176,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 GST_PLUGIN_DEFINE(
     GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
-    torchinfer,
+    torchpreproc,
     "TorchScript inference with CoreMetadata integration",
     plugin_init,   // <-- correct init function
     "1.0",
