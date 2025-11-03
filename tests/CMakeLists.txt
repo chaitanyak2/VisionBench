@@ -15,7 +15,7 @@ function(add_gtest name)
         coreutils
         gtest
         gtest_main
-        
+        gstfaissstore
     )
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
@@ -36,3 +36,4 @@ add_gtest(test_benchmark_recorder test_benchmark_recorder.cpp)
 add_gtest(test_gstcoremeta core/test_gstcoremeta.cpp)
 add_gtest(test_metadata core/test_metadata.cpp)
 add_gtest(test_faiss_storage  unit/test_faiss_storage.cpp)
+add_gtest(test_faissstore_sink  unit/test_faissstore_sink.cpp)
