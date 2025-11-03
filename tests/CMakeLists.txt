@@ -13,6 +13,9 @@ function(add_gtest name)
         ${GST_LIBRARIES}
         ${GST_VIDEO_LIBRARIES}
         coreutils
+        gtest
+        gtest_main
+        
     )
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
@@ -32,3 +35,4 @@ ${CMAKE_SOURCE_DIR}/plugins/vbinfer/torch_infer.cpp
 add_gtest(test_benchmark_recorder test_benchmark_recorder.cpp)
 add_gtest(test_gstcoremeta core/test_gstcoremeta.cpp)
 add_gtest(test_metadata core/test_metadata.cpp)
+add_gtest(test_faiss_storage  unit/test_faiss_storage.cpp)
