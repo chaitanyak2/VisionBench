@@ -1,7 +1,7 @@
 # VisionSearch Engine
 
-![Code Lines](https://img.shields.io/badge/code%20lines-350-blue)
-![Test Lines](https://img.shields.io/badge/test%20lines-135-green)
+![Code Lines](https://img.shields.io/badge/code%20lines-26K-blue)
+![Test Lines](https://img.shields.io/badge/test%20lines-450-green)
 
 ---
 
