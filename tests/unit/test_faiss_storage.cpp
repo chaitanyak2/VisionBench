@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
-#include "faiss_storage.h"
+#include "faiss_storage.hpp"
+
+using namespace visionbench;
 
 TEST(FaissStorage, AddAndSearch)
 {
@@ -8,7 +10,7 @@ TEST(FaissStorage, AddAndSearch)
     CoreMetadata meta{};
     meta.image_width = 32;
     meta.image_height = 32;
-    meta.stage = Stage::DONE;
+    meta.stage = Stage::EMBEDDING;
 
     std::vector<float> e1 = {1.0, 0.0, 0.0, 0.0};
     std::vector<float> e2 = {0.0, 1.0, 0.0, 0.0};
