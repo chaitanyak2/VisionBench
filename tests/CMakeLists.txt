@@ -1,11 +1,34 @@
-# tests/CMakeLists.txt
-cmake_minimum_required(VERSION 3.16)
-
-find_package(GTest REQUIRED)
-
-add_executable(test_benchmark test_benchmark_recorder.cpp)
-target_include_directories(test_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/include)
-target_link_libraries(test_benchmark PRIVATE visionbench GTest::GTest GTest::Main pthread sqlite3)
-
 enable_testing()
-add_test(NAME BenchTests COMMAND test_benchmark)
+find_package(GTest REQUIRED)
+include_directories(${GTEST_INCLUDE_DIRS})
+
+# Define helper
+function(add_gtest name)
+    add_executable(${name} ${ARGN})
+    target_link_libraries(${name}
+        ${GTEST_LIBRARIES}
+        ${GTEST_MAIN_LIBRARIES}
+        pthread
+        ${TORCH_LIBRARIES}
+        ${GST_LIBRARIES}
+        ${GST_VIDEO_LIBRARIES}
+        coreutils
+    )
+    add_test(NAME ${name} COMMAND ${name})
+endfunction()
+
+# --- Tests that use plugin sources ---
+add_gtest(test_torchpreproc
+${CMAKE_SOURCE_DIR}/plugins/vbprocessor/torch_std_mean_preproc.cpp
+    unit/test_torch_std_mean_preproc.cpp
+)
+
+add_gtest(test_torchinfer
+${CMAKE_SOURCE_DIR}/plugins/vbinfer/torch_infer.cpp
+    unit/test_torch_infer.cpp
+)
+
+# --- Other core tests ---
+add_gtest(test_benchmark_recorder test_benchmark_recorder.cpp)
+add_gtest(test_gstcoremeta core/test_gstcoremeta.cpp)
+add_gtest(test_metadata core/test_metadata.cpp)
