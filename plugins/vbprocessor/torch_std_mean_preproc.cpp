@@ -4,6 +4,7 @@
 #include <torch/torch.h>
 #include "metadata.hpp"
 #include "gstcoremeta.hpp"
+#include "benchmark_recorder.hpp"
 
 using namespace visionbench;
 
@@ -47,6 +48,7 @@ static gboolean gst_torchpreproc_set_info(GstVideoFilter *filter,
 extern "C" GstFlowReturn gst_torchpreproc_transform_frame(GstVideoFilter *filter,
                                                       GstVideoFrame *inframe,
                                                       GstVideoFrame *outframe) {
+    uint64_t start_time_ms = g_get_real_time() / 1000;
     GstTorchPreproc *self = GST_TORCHPREPROC(filter);
     /* --- Ensure output buffer is writable --- */
     GstBuffer *buf = inframe->buffer ? gst_buffer_ref(inframe->buffer) : nullptr;
@@ -132,6 +134,24 @@ extern "C" GstFlowReturn gst_torchpreproc_transform_frame(GstVideoFilter *filter
 
     core_meta->stage_status = StageStatus::DONE;
 
+    uint64_t end_time_ms = g_get_real_time() / 1000;
+
+visionbench::BenchmarkEntry entry;
+entry.metadata_id = (meta && meta->core_meta) ? meta->core_meta->metadata_id : 0;
+entry.module_name = "torchpreproc";
+entry.params_serialized = 
+    "{" 
+    "\"width\":" + std::to_string(core_meta->image_width) + "," +
+    "\"height\":" + std::to_string(core_meta->image_height) + "," +
+    "\"channels\":" + std::to_string(core_meta->preprocess_meta->channels) + "," +
+    "\"duration_ms\":" + std::to_string(end_time_ms - start_time_ms) +
+    "}";
+
+entry.timestamp_unix_ms = end_time_ms;
+
+visionbench::BenchmarkRecorder::instance().record(entry);
+
+
     return GST_FLOW_OK;
 }
 
@@ -165,6 +185,15 @@ static void gst_torchpreproc_init(GstTorchPreproc *self) {
 // Plugin initialization function
 extern "C" gboolean plugin_init(GstPlugin *plugin)
 {
+    // Initialize the benchmark recorder once
+    static bool initialized = false;
+    if (!initialized) {
+        
+        if (!visionbench::BenchmarkRecorder::instance().init("/tmp/visionbench_benchmarks.db")) {
+            g_printerr("⚠️ Failed to initialize BenchmarkRecorder database\n");
+        }
+        initialized = true;
+    }
     return gst_element_register(plugin, "torchpreproc", GST_RANK_NONE, GST_TYPE_TORCHPREPROC);
 }
 
