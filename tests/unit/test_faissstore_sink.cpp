@@ -1,4 +1,4 @@
-// tests/test_faissstore.cpp
+// tests/test_faissstore_sink.cpp
 
 #include <gtest/gtest.h>
 #include <gst/gst.h>
@@ -13,6 +13,8 @@
 extern "C" {
     gboolean gst_faiss_store_plugin_init(GstPlugin *plugin);
     GstFlowReturn gst_faiss_store_render(GstBaseSink *sink, GstBuffer *buffer);
+    gboolean gst_faiss_store_stop(GstBaseSink *basesink);
+    gboolean gst_faiss_store_start(GstBaseSink *basesink);
 }
 
 TEST(FaissStore, AttachesMetadataAndStoresEmbedding)
@@ -33,6 +35,8 @@ TEST(FaissStore, AttachesMetadataAndStoresEmbedding)
     // ✅ Create element instance
     GstElement *element = gst_element_factory_make("faissstore", nullptr);
     ASSERT_NE(element, nullptr) << "Failed to create faissstore element.";
+    // Cast element to base sink
+GstBaseSink *sink = GST_BASE_SINK(element);
 
     // ✅ Configure sink output paths
     g_object_set(G_OBJECT(element),
@@ -42,8 +46,8 @@ TEST(FaissStore, AttachesMetadataAndStoresEmbedding)
                  NULL);
 
     // ✅ Create fake embedding buffer (pretend it came from torchinfer)
-    const int embedding_dim = 128;
-    torch::Tensor embedding = torch::randint(0, 256, {embedding_dim}, torch::kFloat32);
+    const int embedding_dim = 576;
+torch::Tensor embedding = torch::rand({embedding_dim}, torch::kFloat32);
 
     GstBuffer *buffer = gst_buffer_new_and_alloc(embedding_dim * sizeof(float));
     GstMapInfo map;
@@ -62,10 +66,17 @@ TEST(FaissStore, AttachesMetadataAndStoresEmbedding)
     meta->core_meta->image_width = 224;
     meta->core_meta->image_height = 224;
     meta->core_meta->channels = visionbench::ChannelType::RGB;
+ASSERT_TRUE(gst_faiss_store_start(sink)) << "gst_base_sink_start failed";
+GstFlowReturn ret = gst_faiss_store_render(sink, buffer);
 
-    // ✅ Push buffer to sink (simulate downstream flow)
-    GstBaseSink *sink = GST_BASE_SINK(element);
-    GstFlowReturn ret = gst_faiss_store_render(GST_BASE_SINK(element), buffer);
-    EXPECT_NE(ret, GST_FLOW_OK) << "Expected FAISS sink render to fail for now.";
+    EXPECT_EQ(ret, GST_FLOW_OK) << "Sink render() failed.";
+
+gst_faiss_store_stop(sink);
+EXPECT_TRUE(std::filesystem::exists("/tmp/test_faiss.index"));
+EXPECT_TRUE(std::filesystem::exists("/tmp/test_faiss.json"));
+
+  // ✅ Cleanup
+    gst_buffer_unref(buffer);
+    gst_object_unref(element);
 
 }

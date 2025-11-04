@@ -37,8 +37,8 @@ GST_DEBUG_CATEGORY_STATIC(faiss_store_debug);
 
 
 /* Forward declarations */
-static gboolean gst_faiss_store_start(GstBaseSink *sink);
-static gboolean gst_faiss_store_stop(GstBaseSink *sink);
+//static gboolean gst_faiss_store_start(GstBaseSink *sink);
+//static gboolean gst_faiss_store_stop(GstBaseSink *sink);
 static void gst_faiss_store_finalize(GObject *object);
 
 G_DEFINE_TYPE_WITH_CODE(GstFaissStore, gst_faiss_store, GST_TYPE_BASE_SINK, G_ADD_PRIVATE(GstFaissStore)
@@ -51,6 +51,22 @@ enum {
     PROP_METADATA_PATH,
     PROP_EXPORT_ON_EOS
 };
+
+extern "C" gboolean gst_faiss_store_start(GstBaseSink *basesink) {
+     GstFaissStore *self = GST_FAISS_STORE(basesink);
+    GST_DEBUG_OBJECT(self, "starting faissstore");
+std::lock_guard<std::mutex> lk(self->lock);
+    try {
+        
+        self->storage = FaissStorage(576);  
+        self->initialized = true;
+    } catch (const std::exception &e) {
+        GST_ERROR_OBJECT(self, "Failed to initialize FaissStorage: %s", e.what());
+        return FALSE;
+    }
+    return TRUE;
+}
+
 
 static void gst_faiss_store_set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec) {
     GstFaissStore *self = GST_FAISS_STORE(object);
@@ -196,6 +212,24 @@ extern "C" GstFlowReturn gst_faiss_store_render(GstBaseSink *basesink, GstBuffer
     return GST_FLOW_OK;
 }
 
+/* stop: called when element stops */
+extern "C" gboolean gst_faiss_store_stop(GstBaseSink *basesink) {
+    GstFaissStore *self = GST_FAISS_STORE(basesink);
+    GST_DEBUG_OBJECT(self, "stopping faissstore");
+    std::lock_guard<std::mutex> lk(self->lock);
+    if (self->export_on_eos) {
+        // flush/save
+        try {
+            // adjust to your API
+            self->storage.saveIndex(self->index_path);
+            self->storage.exportMetadata(self->metadata_path);
+        } catch (...) {
+            GST_WARNING_OBJECT(self, "Failed to save/export Faiss data on stop");
+        }
+    }
+    self->initialized = false;
+    return TRUE;
+}
 
 static void gst_faiss_store_class_init(GstFaissStoreClass *klass) {
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
@@ -241,41 +275,6 @@ static void gst_faiss_store_init(GstFaissStore *self) {
     self->metadata_path = g_strdup("faiss_metadata.json");
     self->export_on_eos = TRUE;
     self->initialized = false;
-}
-
-/* start: called when element goes to PLAYING */
-static gboolean gst_faiss_store_start(GstBaseSink *basesink) {
-     GstFaissStore *self = GST_FAISS_STORE(basesink);
-    GST_DEBUG_OBJECT(self, "starting faissstore");
-
-    try {
-        std::lock_guard<std::mutex> lk(self->lock);
-        self->storage = FaissStorage(576);  // use correct dimension from your test embeddings
-        self->initialized = true;
-    } catch (const std::exception &e) {
-        GST_ERROR_OBJECT(self, "Failed to initialize FaissStorage: %s", e.what());
-        return FALSE;
-    }
-    return TRUE;
-}
-
-/* stop: called when element stops */
-static gboolean gst_faiss_store_stop(GstBaseSink *basesink) {
-    GstFaissStore *self = GST_FAISS_STORE(basesink);
-    GST_DEBUG_OBJECT(self, "stopping faissstore");
-    std::lock_guard<std::mutex> lk(self->lock);
-    if (self->export_on_eos) {
-        // flush/save
-        try {
-            // adjust to your API
-            self->storage.saveIndex(self->index_path);
-            self->storage.exportMetadata(self->metadata_path);
-        } catch (...) {
-            GST_WARNING_OBJECT(self, "Failed to save/export Faiss data on stop");
-        }
-    }
-    self->initialized = false;
-    return TRUE;
 }
 
 
