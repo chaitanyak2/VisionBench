@@ -3,7 +3,7 @@
 #include <torch/script.h>
 #include "metadata.hpp"
 #include "gstcoremeta.hpp"
-
+#include "benchmark_recorder.hpp"
 
 using namespace visionbench;
 
@@ -235,7 +235,16 @@ g_print("[TorchInfer] out writable? %d in writable? %d\n",
     gst_memory_unmap(mem, &info);
 
       uint64_t end_time_ms = g_get_real_time() / 1000;
-     
+     visionbench::BenchmarkEntry entry;
+ entry.metadata_id = (out_meta && out_meta->core_meta) ?core.metadata_id : 0;
+ entry.module_name = "torchinfer";
+ entry.params_serialized = 
+     "{" 
+     "\"model_name\":" + core.inference_meta->model_name + "," +
+     "\"inference_latency\":" + std::to_string(latency_ms) + "," +
+     "}";
+ entry.timestamp_unix_ms = end_time_ms;
+ visionbench::BenchmarkRecorder::instance().record(entry);
 
     return GST_FLOW_OK;
 }
@@ -286,6 +295,14 @@ static void gst_torchinfer_init(GstTorchInfer *self) {
 // Plugin initialization function
  extern "C" gboolean plugin_init(GstPlugin *plugin)
 {
+    static bool initialized = false;
+    if (!initialized) {
+        
+        if (!visionbench::BenchmarkRecorder::instance().init("/tmp/visionbench_benchmarks.db")) {
+            g_printerr("Failed to initialize BenchmarkRecorder database\n");
+        }
+        initialized = true;
+    }
     return gst_element_register(plugin, "torchinfer", GST_RANK_NONE, GST_TYPE_TORCHINFER);
 }
 
@@ -305,4 +322,3 @@ GST_PLUGIN_DEFINE(
     PACKAGE,
     "https://github.com/chaitanya.k2/VisionBench"
 )
-
