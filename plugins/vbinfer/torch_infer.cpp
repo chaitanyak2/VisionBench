@@ -293,17 +293,25 @@ static void gst_torchinfer_init(GstTorchInfer *self) {
 }
 
 // Plugin initialization function
- extern "C" gboolean plugin_init(GstPlugin *plugin)
+ extern "C" gboolean gst_torch_infer_plugin_init(GstPlugin *plugin)
 {
-    static bool initialized = false;
-    if (!initialized) {
-        
-        if (!visionbench::BenchmarkRecorder::instance().init("/tmp/visionbench_benchmarks.db")) {
-            g_printerr("Failed to initialize BenchmarkRecorder database\n");
+
+    try {
+        // Register element type
+        if (!gst_element_register(plugin, "torchinfer", GST_RANK_NONE, GST_TYPE_TORCHINFER)) {
+            std::cerr << "[TorchInfer] Element registration failed\n";
+            return FALSE;
         }
-        initialized = true;
+        std::cerr << "[TorchInfer] Plugin registered successfully\n";
+        return TRUE;
+    } catch (const std::exception &e) {
+        std::cerr << "[TorchInfer] Exception during plugin init: " << e.what() << "\n";
+        return FALSE;
+    } catch (...) {
+        std::cerr << "[TorchInfer] Unknown exception during plugin init\n";
+        return FALSE;
     }
-    return gst_element_register(plugin, "torchinfer", GST_RANK_NONE, GST_TYPE_TORCHINFER);
+    
 }
 
 // Define PACKAGE for non-autotools builds (CMake)
@@ -316,7 +324,7 @@ GST_PLUGIN_DEFINE(
     GST_VERSION_MINOR,
     torchinfer,
     "TorchScript inference with CoreMetadata integration",
-    plugin_init,   // <-- correct init function
+    gst_torch_infer_plugin_init,   // <-- correct init function
     "1.0",
     "LGPL",
     PACKAGE,

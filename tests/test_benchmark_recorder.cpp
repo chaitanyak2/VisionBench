@@ -4,8 +4,8 @@
 #include <vector>
 #include <cstdio>
 #include <filesystem>
-
-#include "../core/include/benchmark_recorder.hpp"
+#include "benchmark_recorder.hpp"
+#include "test_fixture.hpp"
 
 using namespace visionbench;
 
@@ -15,11 +15,8 @@ static std::string make_temp_db() {
     std::remove(path.c_str());
     return path;
 }
-
-TEST(BenchmarkRecorderTest, SingleRecordSaveAndFetch) {
-    auto db = make_temp_db();
-    auto &rec = BenchmarkRecorder::instance();
-    ASSERT_TRUE(rec.init(db));
+TEST_F(VisionBenchFixture, BenchmarkRecorderTest_SingleRecordSaveAndFetch) {
+     auto &rec = BenchmarkRecorder::instance();
     BenchmarkEntry e;
     e.metadata_id = 42;
     e.module_name = "preprocess.resize";
@@ -31,15 +28,11 @@ TEST(BenchmarkRecorderTest, SingleRecordSaveAndFetch) {
     ASSERT_GE(rows.size(), 1u);
     EXPECT_EQ(rows.back().metadata_id, 42);
     EXPECT_EQ(rows.back().module_name, "preprocess.resize");
-    rec.shutdown();
-    std::remove(db.c_str());
+    
 }
 
-TEST(BenchmarkRecorderTest, ConcurrentWriters) {
-    auto db = make_temp_db();
-    auto &rec = BenchmarkRecorder::instance();
-    ASSERT_TRUE(rec.init(db));
-
+TEST_F(VisionBenchFixture, BenchmarkRecorderTest_ConcurrentWriters) {
+     auto &rec = BenchmarkRecorder::instance();
     const int nThreads = 2;
     const int perThread = 200;
     std::vector<std::thread> threads;
@@ -61,15 +54,13 @@ TEST(BenchmarkRecorderTest, ConcurrentWriters) {
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
     auto rows = rec.fetch_all();
     EXPECT_GE((int)rows.size(), nThreads * perThread);
-    rec.shutdown();
-    std::remove(db.c_str());
+    
 }
 
-TEST(BenchmarkRecorderTest, WriterReaderInterleaved) {
-    auto db = make_temp_db();
+TEST_F(VisionBenchFixture, BenchmarkRecorderTest_WriterReaderInterleaved) {
+   
     auto &rec = BenchmarkRecorder::instance();
-    ASSERT_TRUE(rec.init(db));
-    std::atomic<bool> stop{false};
+    
 
     std::thread writer([&]() {
         int i = 0;
@@ -102,15 +93,14 @@ TEST(BenchmarkRecorderTest, WriterReaderInterleaved) {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     auto rows = rec.fetch_all();
     EXPECT_GE(rows.size(), 500u);
-    rec.shutdown();
-    std::remove(db.c_str());
+    
 }
 
 // Test that queue drains on shutdown
-TEST(BenchmarkRecorderTest, QueueDrainsOnShutdown) {
-    auto db = make_temp_db();
+TEST_F(VisionBenchFixture, BenchmarkRecorderTest_QueueDrainsOnShutdown) {
+    
     auto &rec = BenchmarkRecorder::instance();
-    ASSERT_TRUE(rec.init(db));
+  
 
     // push many items quickly
     for (int i=0;i<1000;++i) {
@@ -122,14 +112,13 @@ TEST(BenchmarkRecorderTest, QueueDrainsOnShutdown) {
     }
     
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    rec.shutdown();
+   
     // reopen same DB to read
     // create a new instance? it's singleton; but shutdown closed DB; instance still exists
     auto rows = rec.fetch_all();
     // Since we shutdown, fetch_all should return what's present
     EXPECT_GE(rows.size(), 1000u);
-     rec.shutdown();
-    std::remove(db.c_str());
+   
 }
 
 int main(int argc, char **argv) {

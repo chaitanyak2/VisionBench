@@ -8,17 +8,18 @@
 #include "gstcoremeta.hpp"
 #include "benchmark_recorder.hpp"
 #include <filesystem>
+#include "test_fixture.hpp"
 
 using namespace visionbench;
 
 extern "C" {
     GstFlowReturn gst_torchpreproc_transform_frame(GstVideoFilter *filter, GstVideoFrame *inframe, GstVideoFrame *outframe);
-    gboolean plugin_init(GstPlugin *plugin);
+    gboolean gst_torch_preprocessor_plugin_init(GstPlugin *plugin);
 
 }
 
-TEST(TorchPreproc, TensorPreprocessingLibTorch) {
-    gst_init(nullptr, nullptr);
+TEST_F(VisionBenchFixture, TorchPreproc_TensorPreprocessingLibTorch) {
+   
     // create dummy RGB image
     int W = 32, H = 32;
     torch::Tensor img = torch::randint(0, 256, {H, W, 3}, torch::kUInt8);
@@ -42,14 +43,13 @@ TEST(TorchPreproc, TensorPreprocessingLibTorch) {
 }
 
 
-TEST(TorchPreproc, BasicTransform)
+TEST_F(VisionBenchFixture, TorchPreproc_BasicTransform)
 {
-    gst_init(nullptr, nullptr);
-
+   
     gboolean registered = gst_plugin_register_static(
         GST_VERSION_MAJOR, GST_VERSION_MINOR,
         "torchpreproc", "Torch preprocessor plugin",
-        plugin_init, "1.0", "LGPL",
+        gst_torch_preprocessor_plugin_init, "1.0", "LGPL",
         "visionbench", "visionbench",
         "https://github.com/chaitanya.k2/VisionBench");
     ASSERT_TRUE(registered);
@@ -89,16 +89,15 @@ TEST(TorchPreproc, BasicTransform)
 
     gst_video_frame_unmap(&inframe);
     gst_video_frame_unmap(&outframe);
-    gst_buffer_unref(in_buf);
-    gst_buffer_unref(out_buf);
+
     gst_object_unref(element);
 }
 
 
 
-TEST(TorchPreproc, PreprocBenchmarkWritesEntry)
+TEST_F(VisionBenchFixture, TorchPreproc_PreprocBenchmarkWritesEntry)
 {
-    gst_init(nullptr, nullptr);
+    
 
     // ✅ 1. Initialize benchmark recorder cleanly
    // auto &recorder = BenchmarkRecorder::instance();
@@ -109,7 +108,7 @@ TEST(TorchPreproc, PreprocBenchmarkWritesEntry)
     gboolean registered = gst_plugin_register_static(
         GST_VERSION_MAJOR, GST_VERSION_MINOR,
         "torchpreproc", "Torch preprocessor plugin",
-        plugin_init, "1.0", "LGPL", "visionbench", "visionbench",
+        gst_torch_preprocessor_plugin_init, "1.0", "LGPL", "visionbench", "visionbench",
         "https://github.com/chaitanya.k2/VisionBench");
 
     ASSERT_TRUE(registered);
@@ -146,8 +145,7 @@ TEST(TorchPreproc, PreprocBenchmarkWritesEntry)
 
     gst_video_frame_unmap(&inframe);
     gst_video_frame_unmap(&outframe);
-    gst_buffer_unref(in_buf);
-    gst_buffer_unref(out_buf);
+ 
     gst_object_unref(element);
 
     // ✅ 5. Allow background thread some time to flush
@@ -161,5 +159,5 @@ TEST(TorchPreproc, PreprocBenchmarkWritesEntry)
     EXPECT_EQ(e.module_name, "torchpreproc");
     EXPECT_NE(e.params_serialized.find("width"), std::string::npos);
     EXPECT_NE(e.params_serialized.find("duration_ms"), std::string::npos);
-    recorder.shutdown();
+    
 }

@@ -1,6 +1,6 @@
 enable_testing()
 find_package(GTest REQUIRED)
-include_directories(${GTEST_INCLUDE_DIRS})
+include_directories(${GTEST_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/tests/common)
 
 # Define helper
 function(add_gtest name)
