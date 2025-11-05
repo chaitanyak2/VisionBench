@@ -4,6 +4,7 @@
 #include "metadata.hpp"
 #include "gstcoremeta.hpp"
 
+
 using namespace visionbench;
 
 #define GST_TYPE_TORCHINFER (gst_torchinfer_get_type())
@@ -20,6 +21,18 @@ struct _GstTorchInfer {
     int in_h;
     int in_w;
 };
+
+static GstStaticPadTemplate sink_template =
+    GST_STATIC_PAD_TEMPLATE("sink",
+                            GST_PAD_SINK,
+                            GST_PAD_ALWAYS,
+                            GST_STATIC_CAPS("video/x-raw, format=(string)RGB, width=(int)[1,MAX], height=(int)[1,MAX]"));
+
+static GstStaticPadTemplate src_template =
+    GST_STATIC_PAD_TEMPLATE("src",
+                            GST_PAD_SRC,
+                            GST_PAD_ALWAYS,
+                            GST_STATIC_CAPS("video/x-raw, format=(string)RGB, width=(int)[1,MAX], height=(int)[1,MAX]"));
 
 G_DEFINE_TYPE(GstTorchInfer, gst_torchinfer, GST_TYPE_VIDEO_FILTER)
 
@@ -72,61 +85,97 @@ static gboolean gst_torchinfer_stop(GstBaseTransform *trans) {
 
 extern "C" GstFlowReturn gst_torchinfer_transform_frame(GstVideoFilter *filter, GstVideoFrame *inframe, GstVideoFrame *outframe) {
     GstTorchInfer *self = GST_TORCHINFER(filter);
+    
     if (!self->model_loaded) {
+        if (self->model_path && g_strcmp0(self->model_path, "model.pt") != 0) {
+            try {
+                self->module = std::make_shared<torch::jit::script::Module>(
+                    torch::jit::load(self->model_path, torch::kCPU));
+                self->module->eval();
+                self->model_loaded = true;
+                g_print("[TorchInfer] Auto-loaded model in transform: %s\n", self->model_path);
+            } catch (const c10::Error &e) {
+                g_printerr("[TorchInfer] Failed to auto-load model %s: %s\n",
+                           self->model_path, e.what());
+                self->model_loaded = false;
+                return GST_FLOW_ERROR;
+            }
+        }else {
         g_printerr("[TorchInfer] Model not loaded.\n");
         return GST_FLOW_ERROR;
+        }
     }
+
+    GstBuffer *outbuf = outframe->buffer;
+    // 1) Make writable (copy-on-write if necessary)
+    outbuf = gst_buffer_make_writable(outbuf);
+ // updat
+// 2) Copy any metadata from input to output
+gst_buffer_copy_into(outbuf, inframe->buffer, GST_BUFFER_COPY_METADATA, 0, -1);
 
     GstBuffer *buf = gst_buffer_ref(inframe->buffer);
 
-    // Retrieve or create CoreMetadata
-    GstCoreMeta *meta = gst_buffer_get_core_meta(buf);
-    std::shared_ptr<CoreMetadata> core_meta;
-    if (meta && meta->core_meta)
-        core_meta = meta->core_meta;
-    else {
-        meta = (GstCoreMeta*)gst_buffer_add_meta(buf, GST_CORE_META_INFO, NULL);
-        meta->core_meta = std::make_shared<CoreMetadata>();
-        core_meta = meta->core_meta;
-    }
+                     // ---------------------------------------------------------------------------
+// Create or update CoreMeta on OUTPUT buffer
+// ---------------------------------------------------------------------------
+GstCoreMeta *out_meta = gst_buffer_get_core_meta(outframe->buffer);
+if (!out_meta) {
+    out_meta = (GstCoreMeta*)gst_buffer_add_meta(outframe->buffer, GST_CORE_META_INFO, NULL);
+    out_meta->core_meta = std::make_shared<visionbench::CoreMetadata>();
 
-    core_meta->stage = Stage::INFERENCE;
-    core_meta->stage_status = StageStatus::QUEUED;
-    core_meta->timestamp_unix_ms = static_cast<uint64_t>(g_get_real_time() / 1000);
+}
+
+// 4) If input had CoreMeta, reuse/share its shared_ptr to preserve preprocess_meta etc.
+GstCoreMeta *in_meta = gst_buffer_get_core_meta(inframe->buffer);
+if (in_meta && in_meta->core_meta) {
+    out_meta->core_meta = in_meta->core_meta; // share pointer
+}
+// 5) Now update inference fields
+auto &core = *out_meta->core_meta;
+
+g_print("[TorchInfer] inframe->buffer=%p outframe->buffer=%p out_buf? (if available)=%p\n",
+        (void*)inframe->buffer, (void*)outframe->buffer, (void*)outbuf /*if you have it*/);
+g_print("[TorchInfer] out writable? %d in writable? %d\n",
+        gst_buffer_is_writable(outframe->buffer),
+        gst_buffer_is_writable(inframe->buffer));
+
+    core.stage = Stage::INFERENCE;
+    core.stage_status = StageStatus::QUEUED;
+    core.timestamp_unix_ms = static_cast<uint64_t>(g_get_real_time() / 1000);
 
     // Retrieve last memory block (preprocessed tensor)
     guint nmem = gst_buffer_n_memory(buf);
     if (nmem == 0) {
         g_printerr("[TorchInfer] No preprocessed tensor found on buffer\n");
-        core_meta->stage_status = StageStatus::FAILED;
+        core.stage_status = StageStatus::FAILED;
         return GST_FLOW_ERROR;
     }
 
     GstMemory *mem = gst_buffer_peek_memory(buf, nmem - 1);
     GstMapInfo info;
     if (!gst_memory_map(mem, &info, GST_MAP_READ)) {
-        core_meta->stage_status = StageStatus::FAILED;
+        core.stage_status = StageStatus::FAILED;
         return GST_FLOW_ERROR;
     }
 
     // Read tensor dimensions from metadata if available
     int C = 3, H = 224, W = 224;
-    if (core_meta->preprocess_meta) {
-        W = core_meta->preprocess_meta->width;
-        H = core_meta->preprocess_meta->height;
-        C = core_meta->preprocess_meta->channels;
+    if (core.preprocess_meta) {
+        W = core.preprocess_meta->width;
+        H = core.preprocess_meta->height;
+        C = core.preprocess_meta->channels;
     }
 
-    size_t expected_bytes = (size_t)C * H * W * sizeof(float);
+    size_t expected_bytes = (size_t)C * H * W ;
     if (info.size < expected_bytes) {
         g_printerr("[TorchInfer] Tensor size mismatch: expected %zu, got %zu\n", expected_bytes, info.size);
-        core_meta->stage_status = StageStatus::FAILED;
+        core.stage_status = StageStatus::FAILED;
         gst_memory_unmap(mem, &info);
         return GST_FLOW_ERROR;
     }
 
-    float *data = reinterpret_cast<float*>(info.data);
-    torch::Tensor input = torch::from_blob(data, {1, C, H, W}, torch::kFloat32).clone();
+    uint8_t *data = reinterpret_cast<uint8_t*>(info.data);
+    torch::Tensor input = torch::from_blob(data, {H, W, C}, torch::kUInt8).to(torch::kFloat32).permute({2,0,1}).unsqueeze(0).clone();
 
     auto start = std::chrono::steady_clock::now();
     torch::Tensor output;
@@ -136,7 +185,7 @@ extern "C" GstFlowReturn gst_torchinfer_transform_frame(GstVideoFilter *filter, 
         output = result.toTensor();
     } catch (const std::exception &e) {
         g_printerr("[TorchInfer] Inference exception: %s\n", e.what());
-        core_meta->stage_status = StageStatus::FAILED;
+        core.stage_status = StageStatus::FAILED;
         gst_memory_unmap(mem, &info);
         return GST_FLOW_ERROR;
     }
@@ -154,29 +203,40 @@ extern "C" GstFlowReturn gst_torchinfer_transform_frame(GstVideoFilter *filter, 
     float conf   = values.item<float>();
 
     // Update metadata with inference results
-    core_meta->inference_meta = std::make_shared<InferenceMeta>();
-    core_meta->inference_meta->embedding_id = core_meta->metadata_id;
-    core_meta->inference_meta->model_name = self->model_path ? self->model_path : "unknown";
-    core_meta->inference_meta->inference_latency_ms = latency_ms;
-    core_meta->inference_meta->device = DeviceType::CPU;
-    core_meta->inference_meta->embedding_dim = output.size(1);
+    core.inference_meta = std::make_shared<InferenceMeta>();
+    core.inference_meta->embedding_id = in_meta->core_meta->metadata_id;
+    core.inference_meta->model_name = self->model_path ? self->model_path : "unknown";
+    core.inference_meta->inference_latency_ms = latency_ms;
+    core.inference_meta->device = DeviceType::CPU;
+    core.inference_meta->embedding_dim = output.size(1);
 
     // Set statuses
-    core_meta->stage_status = StageStatus::DONE;
-    core_meta->overall_status = OverallStatus::IN_PROGRESS;
-
+    core.stage_status = StageStatus::DONE;
+    core.overall_status = OverallStatus::IN_PROGRESS;
+    //outframe->buffer = outbuf;
     // Attach result to bus
     GstElement *element = GST_ELEMENT(filter);
     GstBus *bus = gst_element_get_bus(element);
+
+    if (bus) {
     gchar *msg = g_strdup_printf("class=%lld conf=%.3f latency=%.2fms",
                                  (long long)cls, conf, latency_ms);
     GstMessage *m = gst_message_new_application(GST_OBJECT(element),
-                      gst_structure_new("torchinfer-result", "result", G_TYPE_STRING, msg, NULL));
+                      gst_structure_new("torchinfer-result",
+                                        "result", G_TYPE_STRING, msg, NULL));
     gst_bus_post(bus, m);
     gst_object_unref(bus);
     g_free(msg);
+} else {
+    // No bus (probably running in a unit test)
+    g_print("[TorchInfer] No pipeline bus, skipping message post\n");
+}
 
     gst_memory_unmap(mem, &info);
+
+      uint64_t end_time_ms = g_get_real_time() / 1000;
+     
+
     return GST_FLOW_OK;
 }
 
@@ -185,6 +245,7 @@ extern "C" GstFlowReturn gst_torchinfer_transform_frame(GstVideoFilter *filter, 
 // ---------------------------------------------------------------------------
 
 static void gst_torchinfer_class_init(GstTorchInferClass *klass) {
+    GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
     gobject_class->set_property = gst_torchinfer_set_property;
     gobject_class->get_property = gst_torchinfer_get_property;
@@ -196,12 +257,22 @@ static void gst_torchinfer_class_init(GstTorchInferClass *klass) {
                             "model.pt",
                             static_cast<GParamFlags>(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+                            // metadata - required
+    gst_element_class_set_static_metadata(
+        element_class,
+        "Torch Inference",
+        "Filter/Effect/Video",
+        "Runs TorchScript model inference and attaches CoreMetadata",
+        "Chaitanya Khire <you@example.com>");
+
     GstBaseTransformClass *btc = GST_BASE_TRANSFORM_CLASS(klass);
     btc->start = GST_DEBUG_FUNCPTR(gst_torchinfer_start);
     btc->stop = GST_DEBUG_FUNCPTR(gst_torchinfer_stop);
 
     GstVideoFilterClass *vfc = GST_VIDEO_FILTER_CLASS(klass);
     vfc->transform_frame = GST_DEBUG_FUNCPTR(gst_torchinfer_transform_frame);
+    gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_template));
+    gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_template));
 }
 
 static void gst_torchinfer_init(GstTorchInfer *self) {
@@ -213,7 +284,7 @@ static void gst_torchinfer_init(GstTorchInfer *self) {
 }
 
 // Plugin initialization function
-static gboolean plugin_init(GstPlugin *plugin)
+ extern "C" gboolean plugin_init(GstPlugin *plugin)
 {
     return gst_element_register(plugin, "torchinfer", GST_RANK_NONE, GST_TYPE_TORCHINFER);
 }
