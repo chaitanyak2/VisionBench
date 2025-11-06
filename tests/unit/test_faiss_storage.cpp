@@ -4,7 +4,7 @@
 
 using namespace visionbench;
 
-TEST(FaissStorage, AddAndSearch)
+TEST_F(VisionBenchFixture, FaissStorage_AddAndSearch)
 {
     FaissStorage store(4);  // 4D FAISS index for testing
 
@@ -28,7 +28,7 @@ TEST(FaissStorage, AddAndSearch)
     EXPECT_EQ(results[0].first, "img1.jpg");
 }
 
-TEST(FaissStorage, ExportMetadata)
+TEST_F(VisionBenchFixture, FaissStorage_ExportMetadata)
 {
     FaissStorage store(2);
     CoreMetadata meta{};
@@ -42,3 +42,24 @@ TEST(FaissStorage, ExportMetadata)
     std::ifstream f("metadata_test.json");
     ASSERT_TRUE(f.good());
 }
+
+TEST_F(VisionBenchFixture, FaissStorageTest_SafePersistence) {
+    
+    {
+        FaissStorage store(576, "Flat", faiss_index_path);
+        std::vector<float> emb(576, 0.1f);
+        store.add(emb, "img.png", CoreMetadata{});
+        store.saveIndex(faiss_index_path);
+        ASSERT_TRUE(std::filesystem::exists(faiss_index_path));
+    }
+
+    // Recreate should load, not overwrite
+    {
+        FaissStorage store(576, "Flat", faiss_index_path);
+        ASSERT_TRUE(store.indexExists(faiss_index_path));
+        store.saveIndex(faiss_index_path); // Should skip overwrite
+    }
+
+    std::filesystem::remove(faiss_index_path);
+}
+

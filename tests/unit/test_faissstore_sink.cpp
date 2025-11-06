@@ -40,8 +40,8 @@ GstBaseSink *sink = GST_BASE_SINK(element);
 
     // ✅ Configure sink output paths
     g_object_set(G_OBJECT(element),
-                 "index-path", "/tmp/test_faiss.index",
-                 "metadata-path", "/tmp/test_faiss.json",
+                 "index-path", faiss_index_path.c_str(),
+                 "metadata-path", faiss_metadata_jsonpath.c_str(),
                  "export-on-eos", TRUE,
                  NULL);
 
@@ -66,14 +66,15 @@ torch::Tensor embedding = torch::rand({embedding_dim}, torch::kFloat32);
     meta->core_meta->image_width = 224;
     meta->core_meta->image_height = 224;
     meta->core_meta->channels = visionbench::ChannelType::RGB;
+    meta->core_meta->image_location = "dummy";
 ASSERT_TRUE(gst_faiss_store_start(sink)) << "gst_base_sink_start failed";
 GstFlowReturn ret = gst_faiss_store_render(sink, buffer);
 
-    EXPECT_EQ(ret, GST_FLOW_OK) << "Sink render() failed.";
+EXPECT_EQ(ret, GST_FLOW_OK) << "Sink render() failed.";
 
 gst_faiss_store_stop(sink);
-EXPECT_TRUE(std::filesystem::exists("/tmp/test_faiss.index"));
-EXPECT_TRUE(std::filesystem::exists("/tmp/test_faiss.json"));
+EXPECT_TRUE(std::filesystem::exists(faiss_index_path));
+EXPECT_TRUE(std::filesystem::exists(faiss_metadata_jsonpath));
 
   // ✅ Cleanup
     gst_buffer_unref(buffer);

@@ -15,6 +15,35 @@ FaissStorage::FaissStorage(int dim, const std::string &index_type)
         throw std::invalid_argument("Unsupported FAISS index type: " + index_type);
 }
 
+FaissStorage::FaissStorage(int dim, const std::string &index_type, const std::string &index_path)
+    : dim_(dim), current_index_path_(index_path)
+{
+    namespace fs = std::filesystem;
+
+    if (fs::exists(index_path)) {
+        try {
+            std::cout << "[FaissStorage] Loading existing FAISS index from: " << index_path << std::endl;
+            index_.reset(faiss::read_index(index_path.c_str()));
+            index_loaded_ = true;
+        } catch (const std::exception &e) {
+            std::cerr << "[FaissStorage] Failed to load index (" << e.what()
+                      << "), creating a new one instead." << std::endl;
+            createNewIndex(index_type);
+        }
+    } else {
+        createNewIndex(index_type);
+    }
+}
+
+void FaissStorage::createNewIndex(const std::string &index_type) {
+    std::cout << "[FaissStorage] Creating new FAISS index of type: " << index_type << std::endl;
+    if (index_type == "Flat")
+        index_ = std::make_unique<faiss::IndexFlatL2>(dim_);
+    else
+        throw std::invalid_argument("Unsupported FAISS index type: " + index_type);
+    index_loaded_ = true;
+}
+
 void FaissStorage::add(const std::vector<float> &embedding,
                        const std::string &image_path,
                        const CoreMetadata &meta)
@@ -48,7 +77,22 @@ FaissStorage::search(const std::vector<float> &query, int k) const
 
 void FaissStorage::saveIndex(const std::string &path) const
 {
-    faiss::write_index(index_.get(), path.c_str());   // ✅ now works
+    namespace fs = std::filesystem;
+
+    if (fs::exists(path)) {
+        std::cerr << "[FaissStorage] Index file already exists (" << path
+                  << "), skipping overwrite.\n";
+        return;
+    }
+
+    std::string tmp_path = path + ".tmp";
+    faiss::write_index(index_.get(), tmp_path.c_str());
+    fs::rename(tmp_path, path); //
+    std::cout << "[FaissStorage] Index saved to: " << path << std::endl;
+}
+
+bool FaissStorage::indexExists(const std::string &path) const {
+    return std::filesystem::exists(path);
 }
 
 void FaissStorage::loadIndex(const std::string &path)
