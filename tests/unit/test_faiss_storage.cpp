@@ -46,8 +46,8 @@ TEST_F(VisionBenchFixture, FaissStorage_ExportMetadata)
 TEST_F(VisionBenchFixture, FaissStorageTest_SafePersistence) {
     
     {
-        FaissStorage store(64, "Flat", faiss_index_path);
-        std::vector<float> emb(64, 0.1f);
+        FaissStorage store(576, "Flat", faiss_index_path);
+        std::vector<float> emb(576, 0.1f);
         store.add(emb, "img.png", CoreMetadata{});
         store.saveIndex(faiss_index_path);
         ASSERT_TRUE(std::filesystem::exists(faiss_index_path));
@@ -55,7 +55,7 @@ TEST_F(VisionBenchFixture, FaissStorageTest_SafePersistence) {
 
     // Recreate should load, not overwrite
     {
-        FaissStorage store(64, "Flat", faiss_index_path);
+        FaissStorage store(576, "Flat", faiss_index_path);
         ASSERT_TRUE(store.indexExists(faiss_index_path));
         store.saveIndex(faiss_index_path); // Should skip overwrite
     }

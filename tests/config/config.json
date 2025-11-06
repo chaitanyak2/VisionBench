@@ -2,5 +2,6 @@
     "data_dir": "data/images",
     "model_path": "data/mobilenetv3_small.pt",
     "db_path": "/tmp/test_suite.db",
-    "faiss_index_path": "/tmp/visionbench_faiss.index"
+    "faiss_index_path": "/tmp/visionbench_faiss.index",
+    "faiss_metadata_jsonpath": "/tmp/faiss_metadata.json"
 }

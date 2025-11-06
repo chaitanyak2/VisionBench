@@ -58,11 +58,13 @@ extern "C" gboolean gst_faiss_store_start(GstBaseSink *basesink) {
 std::lock_guard<std::mutex> lk(self->lock);
     try {
         
-        self->storage = FaissStorage(576);  
+        self->storage = FaissStorage(576, "Flat", self->index_path);  
         self->initialized = true;
+        GST_DEBUG_OBJECT(self, "started faisstore");
     } catch (const std::exception &e) {
         GST_ERROR_OBJECT(self, "Failed to initialize FaissStorage: %s", e.what());
         return FALSE;
+        
     }
     return TRUE;
 }
@@ -154,6 +156,8 @@ extern "C" GstFlowReturn gst_faiss_store_render(GstBaseSink *basesink, GstBuffer
 
         try {
             std::lock_guard<std::mutex> lk(self->lock);
+            GST_INFO_OBJECT(self, "Going to add embeddings 1");
+            
             self->storage.add(emb_vec,
                               coremeta->core_meta->image_location,
                               *coremeta->core_meta);
@@ -184,6 +188,7 @@ extern "C" GstFlowReturn gst_faiss_store_render(GstBaseSink *basesink, GstBuffer
 
             // Now call FaissStorage (only if emb_vec length >= 1)
             try {
+                GST_INFO_OBJECT(self, "Trying to add embedding to store 2");
                 std::lock_guard<std::mutex> lk(self->lock);
                 self->storage.add(emb_vec,
                                   coremeta->core_meta->image_location,

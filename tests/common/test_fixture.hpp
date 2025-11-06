@@ -37,6 +37,7 @@ class VisionBenchFixture : public ::testing::Test {
     static inline std::string nn_model_path;
     static inline std::string db_path;
     static inline std::string faiss_index_path;
+    static inline std::string faiss_metadata_jsonpath;
 
 public:
     static void SetUpTestSuite() {
@@ -61,16 +62,19 @@ public:
                 if (cfg.contains("model_path") && cfg["model_path"].is_string()) nn_model_path = cfg["model_path"];
                 if (cfg.contains("db_path") && cfg["db_path"].is_string()) db_path = cfg["db_path"];
                 if (cfg.contains("faiss_index_path") && cfg["faiss_index_path"].is_string()) faiss_index_path = cfg["faiss_index_path"];
+                if (cfg.contains("faiss_metadata_jsonpath") && cfg["faiss_metadata_jsonpath"].is_string()) faiss_metadata_jsonpath = cfg["faiss_metadata_jsonpath"];
 
                 // After parsing JSON config, normalize all relevant paths:
 nn_model_path = resolve_relative_to_project_root(nn_model_path).string();
 data_dir = resolve_relative_to_project_root(data_dir).string();
 db_path = resolve_relative_to_project_root(db_path).string();
 faiss_index_path = resolve_relative_to_project_root(faiss_index_path).string();
+faiss_metadata_jsonpath = resolve_relative_to_project_root(faiss_metadata_jsonpath).string();
 std::cout << "model_path "<< nn_model_path << std::endl;
 std::cout << "data_dir "<< data_dir << std::endl;
 std::cout << "db_path "<< db_path << std::endl;
 std::cout << "faiss_index_path "<< faiss_index_path << std::endl;
+std::cout << "faiss_metadata_jsonpath "<< faiss_index_path << std::endl;
 
 std::cerr << "[VisionBenchFixture] Using data_dir=" << data_dir << "\n";
 std::cerr << "[VisionBenchFixture] Using model_path=" << nn_model_path << "\n";
