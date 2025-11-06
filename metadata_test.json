@@ -1,0 +1,11 @@
+{
+    "0": {
+        "channels": 3,
+        "height": 64,
+        "image": "test.jpg",
+        "stage": 0,
+        "stage_status": 2,
+        "timestamp_unix_ms": 0,
+        "width": 64
+    }
+}

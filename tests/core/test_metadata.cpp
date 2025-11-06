@@ -1,9 +1,11 @@
 // tests/test_metadata.cpp
 #include <gtest/gtest.h>
 #include "metadata.hpp"
+#include "test_fixture.hpp"
+
 using namespace visionbench;
 
-TEST(Metadata, DefaultInitialization) {
+TEST_F(VisionBenchFixture, Metadata_DefaultInitialization) {
     CoreMetadata meta;
     EXPECT_EQ(meta.stage, Stage::READ);
     EXPECT_EQ(meta.stage_status, StageStatus::QUEUED);
@@ -11,7 +13,7 @@ TEST(Metadata, DefaultInitialization) {
     EXPECT_EQ(meta.channels, ChannelType::RGB);
 }
 
-TEST(Metadata, PreprocessMetaAssignment) {
+TEST_F(VisionBenchFixture, Metadata_PreprocessMetaAssignment) {
     CoreMetadata meta;
     meta.preprocess_meta = std::make_shared<PreprocessMeta>();
     meta.preprocess_meta->width = 224;
@@ -21,7 +23,7 @@ TEST(Metadata, PreprocessMetaAssignment) {
     EXPECT_EQ(meta.preprocess_meta->channels, 3);
 }
 
-TEST(Metadata, StageTransition) {
+TEST_F(VisionBenchFixture, Metadata_StageTransition) {
     CoreMetadata meta;
     meta.stage = Stage::PREPROCESS;
     EXPECT_EQ(meta.stage, Stage::PREPROCESS);

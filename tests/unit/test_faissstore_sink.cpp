@@ -9,6 +9,7 @@
 #include "gstfaissstore.hpp"
 #include "faiss_storage.hpp"
 #include <filesystem>
+#include "test_fixture.hpp"
 
 extern "C" {
     gboolean gst_faiss_store_plugin_init(GstPlugin *plugin);
@@ -17,10 +18,9 @@ extern "C" {
     gboolean gst_faiss_store_start(GstBaseSink *basesink);
 }
 
-TEST(FaissStore, AttachesMetadataAndStoresEmbedding)
+TEST_F(VisionBenchFixture, FaissStore_AttachesMetadataAndStoresEmbedding)
 {
-    gst_init(nullptr, nullptr);
-
+    
     // ✅ Register plugin statically
     gboolean registered = gst_plugin_register_static(
         GST_VERSION_MAJOR, GST_VERSION_MINOR,

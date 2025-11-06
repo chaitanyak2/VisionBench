@@ -183,17 +183,10 @@ static void gst_torchpreproc_init(GstTorchPreproc *self) {
 }
 
 // Plugin initialization function
-extern "C" gboolean plugin_init(GstPlugin *plugin)
+extern "C" gboolean gst_torch_preprocessor_plugin_init(GstPlugin *plugin)
 {
     // Initialize the benchmark recorder once
-    static bool initialized = false;
-    if (!initialized) {
-        
-        if (!visionbench::BenchmarkRecorder::instance().init("/tmp/visionbench_benchmarks.db")) {
-            g_printerr("⚠️ Failed to initialize BenchmarkRecorder database\n");
-        }
-        initialized = true;
-    }
+   
     return gst_element_register(plugin, "torchpreproc", GST_RANK_NONE, GST_TYPE_TORCHPREPROC);
 }
 
@@ -207,7 +200,7 @@ GST_PLUGIN_DEFINE(
     GST_VERSION_MINOR,
     torchpreproc,
     "TorchScript inference with CoreMetadata integration",
-    plugin_init,   // <-- correct init function
+    gst_torch_preprocessor_plugin_init,   // <-- correct init function
     "1.0",
     "LGPL",
     PACKAGE,

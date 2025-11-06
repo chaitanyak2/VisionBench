@@ -2,9 +2,10 @@
 #include <gtest/gtest.h>
 #include "gstcoremeta.hpp"
 #include "metadata.hpp"
+#include "test_fixture.hpp"
 
-TEST(GstCoreMeta, RegisterAndAttach) {
-    gst_init(nullptr, nullptr);
+TEST_F(VisionBenchFixture, GstCoreMeta_RegisterAndAttach) {
+    
     GstBuffer *buffer = gst_buffer_new();
     const GstMetaInfo *info = gst_core_meta_get_info();
     ASSERT_NE(info, nullptr);

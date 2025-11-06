@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "faiss_storage.hpp"
+#include "test_fixture.hpp"
 
 using namespace visionbench;
 
