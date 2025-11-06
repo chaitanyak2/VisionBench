@@ -6,11 +6,13 @@
 #include <memory>
 #include <fstream>
 #include "metadata.hpp"  // your existing CoreMetadata struct
+#include <filesystem>  
 
 namespace visionbench{
 class FaissStorage {
 public:
     explicit FaissStorage(int dim, const std::string &index_type = "Flat");
+    explicit FaissStorage(int dim, const std::string &index_type, const std::string &index_path);
 
     void add(const std::vector<float> &embedding,
              const std::string &image_path,
@@ -21,6 +23,7 @@ public:
     void saveIndex(const std::string &path) const;
     void loadIndex(const std::string &path);
     void exportMetadata(const std::string &json_path) const;
+    bool indexExists(const std::string &path) const;
 
     size_t size() const { return entries_.size(); }
 
@@ -28,11 +31,16 @@ private:
     std::unique_ptr<faiss::Index> index_;
     int dim_;
 
+    bool index_loaded_ = false;
+    std::string current_index_path_;
+
     struct Entry {
         std::string image_path;
         visionbench::CoreMetadata metadata;   // ✅ make sure it's named exactly this
     };
 
     std::vector<Entry> entries_;
+
+    void createNewIndex(const std::string &index_type);
 };
 }
