@@ -21,7 +21,7 @@ public:
     std::vector<std::pair<std::string, float>> search(const std::vector<float> &query, int k = 5) const;
 
     void saveIndex(const std::string &path) const;
-    void loadIndex(const std::string &path);
+    bool loadIndex(const std::string &path, bool force_reload = false);
     void exportMetadata(const std::string &json_path) const;
     bool indexExists(const std::string &path) const;
 

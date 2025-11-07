@@ -95,9 +95,40 @@ bool FaissStorage::indexExists(const std::string &path) const {
     return std::filesystem::exists(path);
 }
 
-void FaissStorage::loadIndex(const std::string &path)
+bool FaissStorage::loadIndex(const std::string &path, bool force_reload)
 {
-    index_.reset(faiss::read_index(path.c_str()));    // ✅ now works
+    namespace fs = std::filesystem;
+
+    // --- Step 1: Safety checks
+    if (!fs::exists(path)) {
+        std::cerr << "[FaissStorage] loadIndex(): File does not exist: " << path << std::endl;
+        return false;
+    }
+
+    // --- Step 2: Prevent accidental reload if index already loaded
+    if (index_loaded_ && !force_reload) {
+        std::cout << "[FaissStorage] loadIndex(): Index already loaded, skipping reload." << std::endl;
+        return true;
+    }
+
+    try {
+        // --- Step 3: Attempt to load
+        std::unique_ptr<faiss::Index> new_index(faiss::read_index(path.c_str()));
+        if (!new_index) {
+            std::cerr << "[FaissStorage] loadIndex(): Failed to read FAISS index from " << path << std::endl;
+            return false;
+        }
+
+        // --- Step 4: Commit swap
+        index_.swap(new_index);
+        index_loaded_ = true;
+        std::cout << "[FaissStorage] loadIndex(): Successfully loaded index from " << path << std::endl;
+        return true;
+    }
+    catch (const std::exception &e) {
+        std::cerr << "[FaissStorage] loadIndex(): Exception while reading index: " << e.what() << std::endl;
+        return false;
+    }
 }
 
 void FaissStorage::exportMetadata(const std::string &json_path) const

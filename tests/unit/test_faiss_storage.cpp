@@ -63,3 +63,50 @@ TEST_F(VisionBenchFixture, FaissStorageTest_SafePersistence) {
     std::filesystem::remove(faiss_index_path);
 }
 
+TEST_F(VisionBenchFixture, FaissStorageTest_LoadIndexBehavior)
+{
+    namespace fs = std::filesystem;
+   
+    int dim = 576;
+
+    // --- Step 1: Create and save a test index
+    {
+        FaissStorage store(dim, "Flat", faiss_index_path);
+        std::vector<float> emb(dim, 0.5f);
+        store.add(emb, "imgA.jpg", CoreMetadata{});
+        store.saveIndex(faiss_index_path);
+        ASSERT_TRUE(fs::exists(faiss_index_path));
+    }
+
+    // --- Step 2: Load existing index successfully
+    {
+        FaissStorage loader(dim, "Flat", ""); // Empty path → load manually
+        bool ok = loader.loadIndex(faiss_index_path);
+        EXPECT_TRUE(ok);
+    }
+
+    // --- Step 3: Skip reload if already loaded
+    {
+        FaissStorage loader(dim, "Flat", "");
+        loader.loadIndex(faiss_index_path);
+        bool skipped = loader.loadIndex(faiss_index_path); // no force
+        EXPECT_TRUE(skipped);
+    }
+
+    // --- Step 4: Force reload
+    {
+        FaissStorage loader(dim, "Flat", "");
+        loader.loadIndex(faiss_index_path);
+        bool forced = loader.loadIndex(faiss_index_path, true);
+        EXPECT_TRUE(forced);
+    }
+
+    // --- Step 5: Handle missing file gracefully
+    {
+        FaissStorage loader(dim, "Flat", "");
+        bool ok = loader.loadIndex("nonexistent_file.index");
+        EXPECT_FALSE(ok);
+    }
+
+    fs::remove(faiss_index_path);
+}
